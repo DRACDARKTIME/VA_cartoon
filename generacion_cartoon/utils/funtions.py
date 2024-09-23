@@ -1,5 +1,6 @@
 import os
 import tensorflow as tf
+import numpy as np
 
 
 def move_files(path_source, path_destination, name_list):
@@ -21,10 +22,10 @@ def split_dataset(list, train_percent=0.8, val_percent=0.1, test_percent=0.1):
     return train, val, test
 
 
-def decode_and_resize(image_path, IMAGE_SIZE=(80, 80)):
+def decode_and_resize(image_path, IMAGE_SIZE=(56, 56)):
     """Decode images"""
     image = tf.io.read_file(image_path)
-    image = tf.image.decode_png(image, channels=3)
+    image = tf.image.decode_png(image, channels=1)
     image = tf.image.convert_image_dtype(image, dtype="float32")
     image = tf.image.resize(image, IMAGE_SIZE)
     return image
