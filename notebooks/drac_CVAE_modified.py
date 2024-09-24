@@ -106,7 +106,7 @@ def compute_loss(model, x):
     )  # how much images look alike, we want to maximize that (-)
     logpz = log_normal_pdf(z, 0.0, 0.0)
     logqz_x = log_normal_pdf(z, mean, logvar)
-    return -tf.reduce_mean(logpx_z + (logpz - logqz_x))
+    return -tf.reduce_mean(0.09 * logpx_z + (logpz - logqz_x))
 
 
 @tf.function
