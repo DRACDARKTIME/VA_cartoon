@@ -5,9 +5,11 @@ import numpy as np
 class CVAE(tf.keras.Model):
     """Convolutional variational autoencoder."""
 
-    def __init__(self, latent_dim):
+    def __init__(self, latent_dim, gamma=1.0, beta=1.0):
         super(CVAE, self).__init__()
         self.latent_dim = latent_dim
+        self.gamma = gamma
+        self.beta = beta
         self.encoder = tf.keras.Sequential(
             [
                 tf.keras.layers.InputLayer(input_shape=(56, 56, 1)),
@@ -106,7 +108,7 @@ def compute_loss(model, x):
     )  # how much images look alike, we want to maximize that (-)
     logpz = log_normal_pdf(z, 0.0, 0.0)
     logqz_x = log_normal_pdf(z, mean, logvar)
-    return -tf.reduce_mean(0.09 * logpx_z + (logpz - logqz_x))
+    return -tf.reduce_mean(model.gamma * logpx_z + model.beta * (logpz - logqz_x))
 
 
 @tf.function

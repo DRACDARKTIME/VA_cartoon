@@ -1,0 +1,15 @@
+artifact_uri: file:///home/dracdarktime/Documents/Proyectos/practicas_profesionales/generacion_cartoon/notebooks/mlruns/0/364c4cbc791643d18d6a187c8e6e9cf5/artifacts
+end_time: 1727294528752
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 364c4cbc791643d18d6a187c8e6e9cf5
+run_name: popular-vole-651
+run_uuid: 364c4cbc791643d18d6a187c8e6e9cf5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1727293944314
+status: 3
+tags: []
+user_id: dracdarktime
