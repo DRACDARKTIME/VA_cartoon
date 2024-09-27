@@ -28,6 +28,8 @@ var/
 *.jpg
 *.png
 *.gif
+#Models h5
+*.h5
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
