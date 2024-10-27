@@ -110,6 +110,16 @@ def compute_loss(model, x):
     logqz_x = log_normal_pdf(z, mean, logvar)
     return -tf.reduce_mean(model.gamma * logpx_z + model.beta * (logpz - logqz_x))
 
+@tf.function
+def train_step(model, x, optimizer):
+    """Executes one training step and returns the loss.
+    This function computes the loss and gradients, and uses the latter to
+    up
+@tf.function
+def train_step(model, x, optimizer):
+    """Executes one training step and returns the loss.
+    This function computes the loss and gradients, and uses the latter to
+    up
 
 @tf.function
 def train_step(model, x, optimizer):
