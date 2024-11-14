@@ -3,6 +3,29 @@ import keras
 import numpy as np
 
 
+class UpSamplingNoGrad(tf.keras.layers.Layer):
+    def __init__(self, size, **kwargs):
+        super(UpSamplingNoGrad, self).__init__(**kwargs)
+        self.upsampling = tf.keras.layers.UpSampling2D(size=size)
+
+    def call(self, inputs):
+        return tf.stop_gradient(self.upsampling(inputs))
+
+
+class CustomUpSampling2D(tf.keras.layers.Layer):
+    def __init__(self, size):
+        super(CustomUpSampling2D, self).__init__()
+        if type(size) is not tuple and type(size) is not list:
+            size = (size, size)
+        self.size = size
+
+    def build(self, input_shape):
+        pass
+
+    def call(self, input):
+        return tf.repeat(tf.repeat(input, self.size[0], axis=1), self.size[1], axis=2)
+
+
 class CNVAE(tf.keras.Model):
     """Convolutional no variational autoencoder."""
 
@@ -39,6 +62,13 @@ class CNVAE(tf.keras.Model):
                 tf.keras.layers.Dense(units=7 * 7 * 32, activation=tf.nn.relu),
                 tf.keras.layers.Reshape(target_shape=(7, 7, 32)),
                 tf.keras.layers.Conv2DTranspose(
+                    filters=128,
+                    kernel_size=3,
+                    strides=2,
+                    padding="same",
+                    activation="relu",
+                ),
+                tf.keras.layers.Conv2DTranspose(
                     filters=64,
                     kernel_size=3,
                     strides=2,
@@ -53,19 +83,27 @@ class CNVAE(tf.keras.Model):
                     activation="relu",
                 ),
                 tf.keras.layers.Conv2DTranspose(
-                    filters=16,
-                    kernel_size=3,
-                    strides=2,
-                    padding="same",
-                    activation="relu",
-                ),
-                tf.keras.layers.Conv2DTranspose(
                     filters=1,
                     kernel_size=3,
                     strides=1,
                     padding="same",
                     activation="sigmoid",
                 ),
+                # CustomUpSampling2D(size=(2, 2)),
+                # tf.keras.layers.Conv2D(
+                #    filters=64, kernel_size=3, padding="same", activation="relu"
+                # ),
+                # CustomUpSampling2D(size=(2, 2)),
+                # tf.keras.layers.Conv2D(
+                #    filters=32, kernel_size=3, padding="same", activation="relu"
+                # ),
+                # CustomUpSampling2D(size=(2, 2)),
+                # tf.keras.layers.Conv2D(
+                #    filters=16, kernel_size=3, padding="same", activation="relu"
+                # ),
+                # tf.keras.layers.Conv2D(
+                #    filters=1, kernel_size=3, padding="same", activation="sigmoid"
+                # ),
             ]
         )
 
@@ -96,7 +134,7 @@ class CNVAE(tf.keras.Model):
         """
         with tf.GradientTape() as tape:
             img_encoded = self.encoder(x)
-            # z = self.reparameterize(img_lat_spa)
+            # img_encoded = self.reparameterize(img_encoded)
             img_decoded = self.decode(img_encoded)
 
         grad_imgenc_dec = tape.gradient(img_decoded, img_encoded)
@@ -104,6 +142,9 @@ class CNVAE(tf.keras.Model):
         grad_decoded_loss = tf.reduce_mean(
             tf.norm(grad_imgenc_dec, axis=-1)
         )  # How much change img_decoded changing img_encoded
+        # reconstruction_loss = tf.reduce_mean(
+        #    tf.reduce_sum(tf.keras.losses.MSE(x, img_decoded), axis=(1, 2))
+        # )
         reconstruction_loss = tf.reduce_mean(
             tf.reduce_sum(
                 tf.keras.losses.binary_crossentropy(x, img_decoded), axis=(1, 2)
@@ -134,8 +175,8 @@ class CNVAE(tf.keras.Model):
         self.center_loss_tracker.update_state(center_loss)
         self.grad_loss_tracker.update_state(grad_decoded_loss)
         return {
-            "total_loss": self.total_loss_tracker.result(),
-            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
-            "center_loss": self.center_loss_tracker.result(),
-            "grad_loss": self.grad_loss_tracker.result(),
+            "total_loss_train": self.total_loss_tracker.result(),
+            "recons_loss_train": self.reconstruction_loss_tracker.result(),
+            "center_loss_train": self.center_loss_tracker.result(),
+            "grad_loss_train": self.grad_loss_tracker.result(),
         }
