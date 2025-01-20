@@ -33,9 +33,8 @@ def decode_and_resize(image_path, IMAGE_SIZE=(56, 56)):
 
 def make_dataset(data, buffer_size=1000, batch_size=32):
     ds = (
-        tf.data.Dataset.from_tensor_slices(data)
-        .map(decode_and_resize)
-        .shuffle(buffer_size)
+        tf.data.Dataset.from_tensor_slices(data).map(decode_and_resize)
+        # .shuffle(buffer_size)
         .batch(batch_size)
     )
     return ds
