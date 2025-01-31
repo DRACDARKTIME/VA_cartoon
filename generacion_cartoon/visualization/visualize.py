@@ -62,6 +62,30 @@ def plot_latent_images(
         plt.savefig(path.data_created_dir(name))
 
 
+def plot_latent_images_dim(
+    model,
+    num_images_x,
+    epoch,
+    im_size=56,
+    save=True,
+    first_epoch=False,
+    f_ep_count=0,
+    dim=2,
+):
+    if dim == 2:
+        plot_latent_images(
+            model,
+            num_images_x,
+            epoch,
+            im_size=56,
+            save=True,
+            first_epoch=False,
+            f_ep_count=0,
+        )
+    else:
+        pass
+
+
 def create_gif(
     name_gif,
     path_save_gif=path.data_created_dir(),
@@ -82,3 +106,24 @@ def create_gif(
     if remove_images == True:
         for file in filenames:
             os.remove(file)
+
+
+def create_gif_dim(
+    name_gif,
+    path_save_gif=path.data_created_dir(),
+    path_images=path.data_created_dir(),
+    name_images="tf_grid*.png",
+    remove_images=True,
+    dim=2,
+):
+
+    if dim == 2:
+        create_gif(
+            name_gif,
+            path_save_gif=path.data_created_dir(),
+            path_images=path.data_created_dir(),
+            name_images="tf_grid*.png",
+            remove_images=True,
+        )
+    else:
+        pass
