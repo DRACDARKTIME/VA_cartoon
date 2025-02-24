@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from tensorflow import keras
 import tensorflow_probability as tfp
 import glob
 import imageio.v2 as imageio

@@ -1,5 +1,5 @@
 import tensorflow as tf
-import keras
+from tensorflow import keras
 import numpy as np
 import generacion_cartoon.visualization.visualize_CNVAE as visualize
 import mlflow
@@ -37,7 +37,7 @@ class CNVAE(tf.keras.Model):
         self.latent_dim = latent_dim
         self.encoder = tf.keras.Sequential(
             [
-                tf.keras.layers.InputLayer(input_shape=(56, 56, 1)),
+                tf.keras.layers.InputLayer(shape=(56, 56, 1)),
                 tf.keras.layers.Conv2D(
                     filters=32, kernel_size=3, strides=(2, 2), activation="relu"
                 ),
@@ -45,14 +45,14 @@ class CNVAE(tf.keras.Model):
                     filters=64, kernel_size=3, strides=(2, 2), activation="relu"
                 ),
                 tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(128, activation="relu"),
+                tf.keras.layers.Dense(500, activation="relu"),
                 tf.keras.layers.Dense(latent_dim),
             ]
         )
 
         self.decoder = tf.keras.Sequential(
             [
-                tf.keras.layers.InputLayer(input_shape=(latent_dim,)),
+                tf.keras.layers.InputLayer(shape=(latent_dim,)),
                 tf.keras.layers.Dense(units=7 * 7 * 64, activation=tf.nn.relu),
                 tf.keras.layers.Reshape(target_shape=(7, 7, 64)),
                 tf.keras.layers.Conv2DTranspose(
