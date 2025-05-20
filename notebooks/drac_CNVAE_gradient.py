@@ -5,108 +5,76 @@ import generacion_cartoon.visualization.visualize_CNVAE as visualize
 import mlflow
 import time
 
+def build_encoder(latent_dim, filters=[32, 64], kernel_size=3, activation="relu", input_shape=(56, 56, 1)):
+    return tf.keras.Sequential([
+        tf.keras.layers.InputLayer(shape=input_shape),
+        tf.keras.layers.Conv2D(filters=filters[0], kernel_size=kernel_size, strides=2, activation=activation),
+        tf.keras.layers.Conv2D(filters=filters[1], kernel_size=kernel_size, strides=2, activation=activation),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(latent_dim),
+    ])
 
-class CustomUpSampling2D(tf.keras.layers.Layer):
-    def __init__(self, size):
-        super(CustomUpSampling2D, self).__init__()
-        if type(size) is not tuple and type(size) is not list:
-            size = (size, size)
-        self.size = size
-
-    def build(self, input_shape):
-        pass
-
-    def call(self, input):
-        return tf.repeat(tf.repeat(input, self.size[0], axis=1), self.size[1], axis=2)
-
+def build_decoder(latent_dim, filters=[128, 64, 1], kernel_size=3, activation="relu", final_activation="sigmoid", reshape_dims=(7,7,100)):
+    return tf.keras.Sequential([
+        tf.keras.layers.InputLayer(shape=(latent_dim,)),
+        tf.keras.layers.Dense(units=reshape_dims[0]*reshape_dims[1]*reshape_dims[2], activation=activation),
+        tf.keras.layers.Reshape(target_shape=reshape_dims),
+        tf.keras.layers.Conv2DTranspose(filters=filters[0], kernel_size=kernel_size, strides=2, padding="same", activation=activation),
+        tf.keras.layers.Conv2DTranspose(filters=filters[1], kernel_size=kernel_size, strides=2, padding="same", activation=activation),
+        tf.keras.layers.Conv2DTranspose(filters=filters[2], kernel_size=kernel_size, strides=2, padding="same", activation=final_activation),
+    ])
 
 class CNVAE(tf.keras.Model):
     """Convolutional no variational autoencoder."""
-
-    def __init__(self, latent_dim, alpha=1.0, beta=1.0, gamma=1.0):
-        super(CNVAE, self).__init__()
-        self.alpha = alpha
+    def __init__(self, latent_dim, beta=0.1, **kwargs):
+        super().__init__(**kwargs)
         self.beta = beta
-        self.gamma = gamma
+        self.latent_dim = latent_dim
+        self.encoder = None
+        self.decoder = None
+        self._init_metrics()
+
+    def build(self, input_shape):
+        self.input_shape_ = input_shape
+        self.encoder = build_encoder(self.latent_dim)
+        self.decoder = build_decoder(self.latent_dim)
+        super().build(input_shape)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "latent_dim": self.latent_dim,
+            "beta": self.beta
+        })
+        return config
+
+    def get_build_config(self):
+        return {
+            "input_shape": (56, 56, 1)  # o el shape que esperas como entrada
+        }
+
+    def build_from_config(self, config):
+        self.build(config["input_shape"])
+
+    def _init_metrics(self):
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
-        self.reconstruction_loss_tracker = keras.metrics.Mean(
-            name="reconstruction_loss"
-        )
+        self.reconstruction_loss_tracker = keras.metrics.Mean(name="reconstruction_loss")
         self.center_loss_tracker = keras.metrics.Mean(name="center_loss")
         self.grad_loss_tracker = keras.metrics.Mean(name="grad_loss")
-        self.latent_dim = latent_dim
-        self.encoder = tf.keras.Sequential(
-            [
-                tf.keras.layers.InputLayer(shape=(56, 56, 1)),
-                tf.keras.layers.Conv2D(
-                    filters=32, kernel_size=3, strides=(2, 2), activation="relu"
-                ),
-                tf.keras.layers.Conv2D(
-                    filters=64, kernel_size=3, strides=(2, 2), activation="relu"
-                ),
-                tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(500, activation="relu"),
-                tf.keras.layers.Dense(latent_dim),
-            ]
-        )
 
-        self.decoder = tf.keras.Sequential(
-            [
-                tf.keras.layers.InputLayer(shape=(latent_dim,)),
-                tf.keras.layers.Dense(units=7 * 7 * 64, activation=tf.nn.relu),
-                tf.keras.layers.Reshape(target_shape=(7, 7, 64)),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=128,
-                    kernel_size=3,
-                    strides=2,
-                    padding="same",
-                    activation="relu",
-                ),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=64,
-                    kernel_size=3,
-                    strides=2,
-                    padding="same",
-                    activation="relu",
-                ),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=32,
-                    kernel_size=3,
-                    strides=2,
-                    padding="same",
-                    activation="relu",
-                ),
-                # tf.keras.layers.Conv2DTranspose(
-                #    filters=16,
-                #    kernel_size=3,
-                #    strides=1,
-                #    padding="same",
-                #    activation="relu",
-                # ),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=1,
-                    kernel_size=3,
-                    strides=1,
-                    padding="same",
-                    activation="sigmoid",
-                ),
-                # CustomUpSampling2D(size=(2, 2)),
-                # tf.keras.layers.Conv2D(
-                #    filters=64, kernel_size=3, padding="same", activation="relu"
-                # ),
-                # CustomUpSampling2D(size=(2, 2)),
-                # tf.keras.layers.Conv2D(
-                #    filters=32, kernel_size=3, padding="same", activation="relu"
-                # ),
-                # CustomUpSampling2D(size=(2, 2)),
-                # tf.keras.layers.Conv2D(
-                #    filters=16, kernel_size=3, padding="same", activation="relu"
-                # ),
-                # tf.keras.layers.Conv2D(
-                #    filters=1, kernel_size=3, padding="same", activation="sigmoid"
-                # ),
-            ]
-        )
+    def summary(self):
+        print("\nEncoder Summary:")
+        self.encoder.summary()
+
+        print("\nDecoder Summary:")
+        self.decoder.summary()
+
+        # Total de parámetros
+        encoder_params = np.sum([np.prod(v.shape) for v in self.encoder.trainable_variables])
+        decoder_params = np.sum([np.prod(v.shape) for v in self.decoder.trainable_variables])
+        total_params = encoder_params + decoder_params
+
+        print(f"\nTotal trainable parameters: {total_params:,}")
 
     def decode(self, z):
         """Image decoded without activation"""
@@ -139,10 +107,14 @@ class CNVAE(tf.keras.Model):
             img_decoded = self.decode(img_encoded)
 
         grad_imgenc_dec = tape.gradient(img_decoded, img_encoded)
+        #grad_imgenc_dec = tape.gradient(tf.reduce_sum(img_decoded), img_encoded)
+        #loss += tf.reduce_mean(tf.square(grad))
+
 
         grad_decoded_loss = tf.reduce_mean(
             tf.norm(grad_imgenc_dec, axis=-1)
         )  # How much change img_decoded changing img_encoded
+            # The magnitud of the grad
         # reconstruction_loss = tf.reduce_mean(
         #    tf.reduce_sum(tf.keras.losses.MSE(x, img_decoded), axis=(1, 2))
         # )
@@ -154,9 +126,9 @@ class CNVAE(tf.keras.Model):
 
         center_loss = tf.reduce_mean(tf.reduce_sum(tf.square(img_encoded), axis=-1))
         total_loss = (
-            self.alpha * reconstruction_loss
-            + self.beta * grad_decoded_loss
-            + self.gamma * center_loss
+            reconstruction_loss +
+            self.beta*grad_decoded_loss + 
+            center_loss
         )
         return total_loss, reconstruction_loss, center_loss, grad_decoded_loss
 
@@ -182,209 +154,82 @@ class CNVAE(tf.keras.Model):
             "center_loss_train": self.center_loss_tracker.result(),
             "grad_loss_train": self.grad_loss_tracker.result(),
         }
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "latent_dim": self.latent_dim,
+            "input_shape": self.input_shape_,
+            # Agrega todos los parámetros que usas en __init__
+        })
+        return config
 
-    def compile(
-        self,
-        patience=100,
-        train_ds=None,
-        optimizer=None,
-        best_total_loss=100000,
-        count=0,
-        test_ds=None,
-        params=None,
-        path_models=None,
-    ):
+    def compile(self, optimizer, patience=100, params=None, path_models=None):
+        self.optimizer = optimizer
+        self.patience = patience
+        self.params = params
+        self.path_models = path_models
+        self.best_total_loss = float('inf')
+        self.count = 0
+
+    def fit(self, train_ds):
         tf.config.run_functions_eagerly(True)
-        visualize.plot_latent_images_dim(
-            model=self, num_images_x=20, epoch=0, dim=params["latent_dim"]
-        )
-        for epoch in range(1, params["epochs"] + 1):
+
+        if self.params["latent_dim"] == 2:
+            visualize.plot_latent_images_dim(
+                model=self, num_images_x=20, epoch=0, dim=self.params["latent_dim"]
+            )
+
+        for epoch in range(1, self.params["epochs"] + 1):
             start_time = time.time()
-            loss4 = tf.keras.metrics.Mean()
-            loss5 = tf.keras.metrics.Mean()
-            loss6 = tf.keras.metrics.Mean()
-            loss7 = tf.keras.metrics.Mean()
+
+            loss_total = tf.keras.metrics.Mean()
+            loss_recon = tf.keras.metrics.Mean()
+            loss_center = tf.keras.metrics.Mean()
+            loss_grad = tf.keras.metrics.Mean()
+
             for idx, train_x in enumerate(train_ds):
-                self.train_step(train_x, optimizer)
-
-                if epoch == 1 and idx % 75 == 0:
+                self.train_step(train_x, self.optimizer)
+                if epoch == 1 and idx % 75 == 0 and self.params["latent_dim"] == 2:
                     visualize.plot_latent_images_dim(
-                        model=self,
-                        num_images_x=20,
-                        epoch=epoch,
-                        first_epoch=True,
-                        f_ep_count=idx,
-                        dim=params["latent_dim"],
+                        model=self, num_images_x=20, epoch=epoch, first_epoch=True, f_ep_count=idx,
+                        dim=self.params["latent_dim"],
                     )
-                (
-                    total_loss_train,
-                    reconstruction_loss_train,
-                    center_loss_train,
-                    grad_decoded_loss_train,
-                ) = self.compute_loss(train_x)
-                loss4(total_loss_train)
-                loss5(reconstruction_loss_train)
-                loss6(center_loss_train)
-                loss7(grad_decoded_loss_train)
+                total_loss_train, recon_loss_train, center_loss_train, grad_loss_train = self.compute_loss(train_x)
+                loss_total(total_loss_train)
+                loss_recon(recon_loss_train)
+                loss_center(center_loss_train)
+                loss_grad(grad_loss_train)
 
-            end_time = time.time()
-            total_loss_train = loss4.result()
-            reconstruction_loss_train = loss5.result()
-            center_loss_train = loss6.result()
-            grad_decoded_loss_train = loss7.result()
+            total_loss_train = loss_total.result()
+            reconstruction_loss_train = loss_recon.result()
+            center_loss_train = loss_center.result()
+            grad_decoded_loss_train = loss_grad.result()
 
-            loss = tf.keras.metrics.Mean()
-            loss1 = tf.keras.metrics.Mean()
-            loss2 = tf.keras.metrics.Mean()
-            loss3 = tf.keras.metrics.Mean()
-
-            for test_x in test_ds:
-                total_loss, reconstruction_loss, center_loss, grad_decoded_loss = (
-                    self.compute_loss(test_x)
-                )
-                loss(total_loss)
-                loss1(reconstruction_loss)
-                loss2(center_loss)
-                loss3(grad_decoded_loss)
-            total_loss = loss.result()
-            reconstruction_loss = loss1.result()
-            center_loss = loss2.result()
-            grad_decoded_loss = loss3.result()
-            if total_loss < best_total_loss:
-                best_total_loss = total_loss
-                self.save_weights(path_models)
-                print(
-                    "Best model saved with best ELBO: {:.2f} in epoch: {}".format(
-                        total_loss, epoch
-                    )
-                )
-                count = 0
+            if total_loss_train < self.best_total_loss:
+                self.best_total_loss = total_loss_train
+                self.save(self.path_models)
+                print(f"Best model saved with ELBO: {total_loss_train:.2f} at epoch: {epoch}")
+                self.count = 0
             else:
-                count = count + 1
-            mlflow.log_metric("total_loss_test", total_loss, step=epoch)
-            mlflow.log_metric("reconstruction_loss", reconstruction_loss, step=epoch)
-            mlflow.log_metric("center_loss", center_loss, step=epoch)
-            mlflow.log_metric("grad_decodad_loss", grad_decoded_loss, step=epoch)
+                self.count += 1
 
             mlflow.log_metric("total_loss_train", total_loss_train, step=epoch)
-            mlflow.log_metric(
-                "reconstruction_loss_train", reconstruction_loss_train, step=epoch
-            )
+            mlflow.log_metric("reconstruction_loss_train", reconstruction_loss_train, step=epoch)
             mlflow.log_metric("center_loss_train", center_loss_train, step=epoch)
-            mlflow.log_metric(
-                "grad_decodad_loss_train", grad_decoded_loss_train, step=epoch
-            )
-            print(
-                "Epoch: {}, total_loss_train: {:.2f}, recons_loss_train: {:.2f}, grad_loss_train: {:.2f}, center_loss_train: {:.2f}".format(
-                    epoch,
-                    total_loss_train,
-                    reconstruction_loss_train,
-                    grad_decoded_loss_train,
-                    center_loss_train,
-                )
-            )
-            print(
-                "Epoch: {}, Test total_loss: {:.2f}, recons_loss: {:.2f}, grad_loss: {:.2f}, center_loss: {:.2f}, time_epoch: {:.2f}".format(
-                    epoch,
-                    total_loss,
-                    reconstruction_loss,
-                    grad_decoded_loss,
-                    center_loss,
-                    end_time - start_time,
-                )
-            )
-            if epoch != 1:
-                visualize.plot_latent_images_dim(
-                    model=self, num_images_x=20, epoch=epoch, dim=params["latent_dim"]
-                )
-            if count == patience:
+            mlflow.log_metric("grad_loss_train", grad_decoded_loss_train, step=epoch)
+
+            end_time = time.time()
+            print(f"Epoch: {epoch}, total_loss_train: {total_loss_train:.2f}, "
+                  f"recons_loss_train: {reconstruction_loss_train:.2f}, "
+                  f"grad_loss_train: {grad_decoded_loss_train:.2f}, "
+                  f"center_loss_train: {center_loss_train:.2f}, time_epoch: {end_time - start_time:.2f}s")
+
+            if epoch != 1 and self.params["latent_dim"] == 2:
+                visualize.plot_latent_images_dim(model=self, num_images_x=20, epoch=epoch, dim=self.params["latent_dim"])
+
+            if self.count >= self.patience:
+                print("Early stopping triggered")
                 break
 
 
-class FCNVAE(tf.keras.Model):
-    """Convolutional no variational autoencoder."""
 
-    def __init__(self, latent_dim, alpha=1.0, beta=1.0, gamma=1.0):
-        super(CNVAE, self).__init__()
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
-        self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
-        self.reconstruction_loss_tracker = keras.metrics.Mean(
-            name="reconstruction_loss"
-        )
-        self.center_loss_tracker = keras.metrics.Mean(name="center_loss")
-        self.grad_loss_tracker = keras.metrics.Mean(name="grad_loss")
-        self.latent_dim = latent_dim
-        self.encoder = tf.keras.Sequential(
-            [
-                tf.keras.layers.InputLayer(input_shape=(56, 56, 1)),
-                tf.keras.layers.Conv2D(
-                    filters=32, kernel_size=3, strides=(2, 2), activation="relu"
-                ),
-                tf.keras.layers.Conv2D(
-                    filters=64, kernel_size=3, strides=(2, 2), activation="relu"
-                ),
-                tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(32, activation="relu"),
-                tf.keras.layers.Dense(latent_dim),
-            ]
-        )
-
-        self.decoder = tf.keras.Sequential(
-            [
-                tf.keras.layers.InputLayer(input_shape=(latent_dim,)),
-                tf.keras.layers.Dense(units=7 * 7 * 32, activation=tf.nn.relu),
-                tf.keras.layers.Reshape(target_shape=(7, 7, 32)),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=128,
-                    kernel_size=3,
-                    strides=2,
-                    padding="same",
-                    activation="relu",
-                ),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=64,
-                    kernel_size=3,
-                    strides=2,
-                    padding="same",
-                    activation="relu",
-                ),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=32,
-                    kernel_size=3,
-                    strides=2,
-                    padding="same",
-                    activation="relu",
-                ),
-                # tf.keras.layers.Conv2DTranspose(
-                #    filters=16,
-                #    kernel_size=3,
-                #    strides=2,
-                #    padding="same",
-                #    activation="relu",
-                # ),
-                tf.keras.layers.Conv2DTranspose(
-                    filters=1,
-                    kernel_size=3,
-                    strides=1,
-                    padding="same",
-                    activation="sigmoid",
-                ),
-                # CustomUpSampling2D(size=(2, 2)),
-                # tf.keras.layers.Conv2D(
-                #    filters=64, kernel_size=3, padding="same", activation="relu"
-                # ),
-                # CustomUpSampling2D(size=(2, 2)),
-                # tf.keras.layers.Conv2D(
-                #    filters=32, kernel_size=3, padding="same", activation="relu"
-                # ),
-                # CustomUpSampling2D(size=(2, 2)),
-                # tf.keras.layers.Conv2D(
-                #    filters=16, kernel_size=3, padding="same", activation="relu"
-                # ),
-                # tf.keras.layers.Conv2D(
-                #    filters=1, kernel_size=3, padding="same", activation="sigmoid"
-                # ),
-            ]
-        )

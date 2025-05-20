@@ -26,7 +26,7 @@ def decode_and_resize(image_path, IMAGE_SIZE=(56, 56)):
     """Decode images"""
     image = tf.io.read_file(image_path)
     image = tf.image.decode_png(image, channels=1)
-    image = tf.image.convert_image_dtype(image, dtype="float32")
+    image = tf.image.convert_image_dtype(image, dtype="float32") # 1/255
     image = tf.image.resize(image, IMAGE_SIZE)
     return image
 
